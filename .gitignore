@@ -38,3 +38,4 @@ tfplan
 
 # Ignore lock files
 .terraform.lock.hcl
+inject_creds.sh

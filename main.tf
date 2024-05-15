@@ -1,4 +1,4 @@
-variable "civo_token" {
+variable "civo_api_token" {
   sensitive = true
   description = "The Civo API token to use"
   type = string
@@ -36,7 +36,7 @@ terraform {
 }
 
 provider "civo" {
-  token = var.civo_token
+  token = var.civo_api_token
   region = "NYC1"
 }
 

@@ -1,18 +1,24 @@
 variable "civo_token" {
-  type = string
-  description = "The Civo API token to use"
   sensitive = true
+  description = "The Civo API token to use"
+  type = string
+}
+
+variable "cloudflare_api_token" {
+  sensitive = true
+  description = "The Cloudflare API token to use"
+  type = string
 }
 
 variable "ssh_enabled" {
-  type = bool
   description = "Whether or not to open port 22 for SSH"
+  type = bool
   default = false
 }
 
 variable "satisfactory_enabled" {
-  type = bool
   description = "Whether or not to open ports for Satisfactory"
+  type = bool
   default = false
 }
 
@@ -22,12 +28,20 @@ terraform {
       source = "civo/civo"
       version = "1.0.41"
     }
+    cloudflare = {
+      source  = "cloudflare/cloudflare"
+      version = "~> 4.0"
+    }
   }
 }
 
 provider "civo" {
   token = var.civo_token
   region = "NYC1"
+}
+
+provider "cloudflare" {
+  api_token = var.cloudflare_api_token
 }
 
 resource "civo_network" "core" {
@@ -39,9 +53,9 @@ locals {
 
   base_rule = {
     protocol = "udp"
+    cidr = ["0.0.0.0/0"]
     # port_range = "xxxx" or "xxxx-xxxx"
     # label = "some label"
-    cidr = ["0.0.0.0/0"]
   }
 
   fw_overlays = {
@@ -55,22 +69,7 @@ locals {
     ] : []
   }
 
-  # "for expression" barf ahead, but it returns the same structure as the fw_overlays but composited on top of base_rule.
-  # Example: start with  {
-  #                        protocol = "udp"
-  #                        cidr = ["0.0.0.0/0"]
-  #                      }
-  #          merges with {
-  #                        label = "foo"
-  #                        protocol = "tcp"
-  #                        port_range = "1"
-  #                      }
-  #          and returns {
-  #                        label = "foo"
-  #                        protocol = "tcp"
-  #                        port_range = "1"
-  #                        cidr = ["0.0.0.0/0"]
-  #                      }
+  # When it's a personal project, it's okay to make unreadable garbage
   fw_overlay_list = flatten([for k, v in local.fw_overlays : v])
   fw_rule_list = [for idx, elem in local.fw_overlay_list : merge(local.base_rule, elem)]
   fw_rule_map = {for idx, elem in local.fw_rule_list : elem.label => elem}
@@ -150,4 +149,18 @@ resource "civo_dns_domain_record" "core" {
     name = "@"
     value = civo_instance.core.public_ip
     ttl = 600
+}
+
+resource "cloudflare_record" "core_nameservers" {
+  for_each = toset(["ns0", "ns1"])
+
+  zone_id = data.cloudflare_zone.apex.id
+  name    = "core"
+  value   = "${each.value}.civo.com"
+  type    = "NS"
+  ttl     = 3600
+}
+
+data "cloudflare_zone" "apex" {
+  name = "goldfish.zone"
 }
